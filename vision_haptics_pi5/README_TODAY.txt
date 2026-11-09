@@ -59,6 +59,35 @@ For one motor, it uses the nearest of all three:
   in between -> proportional vibration
 Change NEAR_M, FAR_M or MAX_RTP near the top of haptic_bridge_drv2605.py.
 
+Detection filtering (ObstacleTracker in depth_demo.py, ON by default):
+  - on-camera spatial depth filter (add more with --filters, e.g. --filters all;
+    combining filters dropped depth to ~16-18 fps in testing)
+  - an obstacle must be a connected blob (>= 300 px) seen in 3 of the last 5 frames
+  - smoothing survives short dropouts; resets after 5 empty frames in a row
+  - if something was < 0.5 m within the last 0.5 s and depth then goes
+    invalid (too close for stereo), the motor stays at full strength
+Compare with the original behaviour using --no-filter. For numbers, point the
+camera at the same scene and run each for 30 s:
+  python haptic_bridge_drv2605.py --dry-run --headless --stats
+  python haptic_bridge_drv2605.py --dry-run --headless --stats --no-filter
+(--stats 60 runs for 60 s instead.)
+
+Finding which on-camera filter costs frame rate: --filters picks the camera
+filters (speckle, temporal, spatial, comma-separated, or all/none) while the
+Pi-side tracking stays ON, so only the camera filters change between runs.
+Same scene each time:
+  for f in none speckle temporal spatial speckle,spatial all; do
+    python haptic_bridge_drv2605.py --dry-run --headless --stats --filters $f
+  done
+The "fps:" line shows sensor -> reached Pi -> processed:
+  "reached Pi" below sensor (dropped on camera) -> the camera's filters can't keep up
+  "reached Pi" ok but "processed" lower (dropped on Pi) -> the Pi is the bottleneck;
+     the "tracker ms/frame" line shows whether the tracker is why (vs its budget)
+  (sequence-number gaps alone can't tell these apart; older runs that said
+   "camera 30 fps ... dropped" may have been camera-side drops)
+Post-processing gets 3 shaves / 3 memory slices by default (fixes the speckle
+"not enough memory" warning); try --pp-shaves 4 or more to win back fps.
+
 NOTES
 -----
 - This is an adaptation for the named hardware, not a verified physical
